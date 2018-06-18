@@ -32,7 +32,7 @@ public class KafkaConsumerExample {
         return consumer;
     }
 
-    static void runConsumer() {
+    static void runConsumer() throws Exception {
 
         final Consumer<Long, String> consumer = createConsumer();
         Map<String, Integer> uniqueUsersMap = new HashMap<>();
@@ -97,7 +97,12 @@ public class KafkaConsumerExample {
         }
 
         result.add(new UniqueUsers(initialTimestamp, uniqueUsersMap.size())); // TODO revisit what map to add (only one or combination)
-        result.forEach(uniqueUser -> System.out.println(uniqueUser.toJson()));
+        boolean writeToConsole = false;
+        if (writeToConsole) {
+            result.forEach(uniqueUser -> System.out.println(uniqueUser.toJson()));
+        } else {
+            KafkaProducerExample.runProducer(result);
+        }
 
         consumer.close();
         System.out.println("DONE");
