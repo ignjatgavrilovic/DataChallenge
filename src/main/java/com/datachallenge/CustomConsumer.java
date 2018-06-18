@@ -40,8 +40,8 @@ public class CustomConsumer {
 
         customProducer = new CustomProducer(produceTopic, bootstrapServer);
 
-        Map<String, Integer> uniqueUsersMap = new HashMap<>();
-        Map<String, Integer> uniqueUsersMapTmp = new HashMap<>();
+        Set<String> uniqueUsersSet = new HashSet<>();
+        Set<String> uniqueUsersSetTmp = new HashSet<>();
 
         final int giveUp = 60; // if there is no data for `giveUp` seconds, stop the consumer
         int noRecordsCount = 0;// count of seconds that had no input
@@ -74,26 +74,26 @@ public class CustomConsumer {
 
                     if (fiveSecondRule) {
                         if (timestamp < initialTimestamp) {
-                            uniqueUsersMap.put(user, 1);
+                            uniqueUsersSet.add(user);
                         } else {
-                            uniqueUsersMapTmp.put(user, 1);
+                            uniqueUsersSetTmp.add(user);
                         }
                     } else {
-                        uniqueUsersMap.put(user, 1);
+                        uniqueUsersSet.add(user);
                     }
 
                     if (timestamp - initialTimestamp >= 60) {
                         initialTimestamp = timestamp / 60 * 60;
                         fiveSecondRule = true;
-                        uniqueUsersMapTmp = new HashMap<>();
+                        uniqueUsersSetTmp = new HashSet<>();
                     }
 
                     if (fiveSecondRule && timestamp - initialTimestamp > 5) {
                         fiveSecondRule = false;
-                        UniqueUsers uniqueUsers = new UniqueUsers(initialTimestamp - 60, uniqueUsersMap.size());
+                        UniqueUsers uniqueUsers = new UniqueUsers(initialTimestamp - 60, uniqueUsersSet.size());
                         customProducer.setUniqueUsers(uniqueUsers);
                         customProducer.run();
-                        uniqueUsersMap = uniqueUsersMapTmp;
+                        uniqueUsersSet = uniqueUsersSetTmp;
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
