@@ -10,62 +10,67 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import java.io.IOException;
 import java.util.*;
 
-public class KafkaConsumerExample {
+public class CustomConsumer {
 
-    private static final String TOPIC = "test";
-    private static final String BOOTSTRAP_SERVER = "localhost:9092";
+    private String consumeTopic; // topic from which log data is read
+    private String produceTopic; // topic to forward to unique users data
+    private String bootstrapServer; // kafka server [host:port]
+    private Consumer<Long, String> consumer;
+    private CustomProducer customProducer;
 
-    private static long initialTimestamp = 0;
+    private long initialTimestamp = 0;
 
-    private static Consumer<Long, String> createConsumer() {
+    public CustomConsumer(String topic, String produceTopic, String bootstrapServer) {
+        this.consumeTopic = topic;
+        this.produceTopic = produceTopic;
+        this.bootstrapServer = bootstrapServer;
+
         final Properties props = new Properties();
-
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVER);
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "KafkaExampleConsumer");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 
-        final Consumer<Long, String> consumer = new KafkaConsumer<>(props);
-        consumer.subscribe(Collections.singletonList(TOPIC));
-
-        return consumer;
+        this.consumer = new KafkaConsumer<>(props);
+        this.consumer.subscribe(Collections.singletonList(topic));
     }
 
-    static void runConsumer() throws Exception {
+    public void run() throws Exception {
 
-        final Consumer<Long, String> consumer = createConsumer();
+        customProducer = new CustomProducer(produceTopic, bootstrapServer);
+
         Map<String, Integer> uniqueUsersMap = new HashMap<>();
         Map<String, Integer> uniqueUsersMapTmp = new HashMap<>();
-        final List<UniqueUsers> result = new ArrayList<>();
-        final int giveUp = 25;   int noRecordsCount = 0;
+
+        final int giveUp = 60; // if there is no data for `giveUp` seconds, stop the consumer
+        int noRecordsCount = 0;// count of seconds that had no input
 
         boolean fiveSecondRule = false;
 
         while (true) {
-            final ConsumerRecords<Long, String> consumerRecords =
-                    consumer.poll(1000);
+            final ConsumerRecords<Long, String> consumerRecords = consumer.poll(1000);
 
-            if (consumerRecords.count()==0) {
+            if (consumerRecords.count() == 0) {
                 noRecordsCount++;
                 System.out.println("No records count: " + noRecordsCount);
                 if (noRecordsCount > giveUp) break;
                 else continue;
             }
 
-
             for (ConsumerRecord<Long, String> record : consumerRecords) {
                 try {
                     ObjectMapper mapper = new ObjectMapper();
-                    JsonNode obj = mapper.readTree(record.value());
+                    JsonNode obj = mapper.readTree(record.value()); // read a log line
 
+                    // get timestamp and user_id from log line
                     long timestamp = obj.findValues("timestamp").get(0).asLong();
                     String user = obj.findValuesAsText("user_id").get(0);
 
-                    // Logic
                     if (initialTimestamp == 0) {
                         initialTimestamp = timestamp / 60 * 60;
                     }
+
 
                     if (fiveSecondRule) {
                         if (timestamp < initialTimestamp) {
@@ -85,7 +90,9 @@ public class KafkaConsumerExample {
 
                     if (fiveSecondRule && timestamp - initialTimestamp > 5) {
                         fiveSecondRule = false;
-                        result.add(new UniqueUsers(initialTimestamp - 60, uniqueUsersMap.size()));
+                        UniqueUsers uniqueUsers = new UniqueUsers(initialTimestamp - 60, uniqueUsersMap.size());
+                        customProducer.setUniqueUsers(uniqueUsers);
+                        customProducer.run();
                         uniqueUsersMap = uniqueUsersMapTmp;
                     }
                 } catch (IOException e) {
@@ -96,19 +103,10 @@ public class KafkaConsumerExample {
             consumer.commitAsync();
         }
 
-        result.add(new UniqueUsers(initialTimestamp, uniqueUsersMap.size())); // TODO revisit what map to add (only one or combination)
-        boolean writeToConsole = false;
-        if (writeToConsole) {
-            result.forEach(uniqueUser -> System.out.println(uniqueUser.toJson()));
-        } else {
-            KafkaProducerExample.runProducer(result);
-        }
 
+        customProducer.close();
         consumer.close();
         System.out.println("DONE");
     }
 
-    public static void main(String[] args) throws Exception {
-        runConsumer();
-    }
 }

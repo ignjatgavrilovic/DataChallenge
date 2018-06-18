@@ -1,5 +1,7 @@
 package com.datachallenge.model;
 
+import org.joda.time.format.DateTimeFormat;
+
 public class UniqueUsers {
     private long timestamp; // padded to minute
     private long count;     // count of unique users
@@ -38,6 +40,13 @@ public class UniqueUsers {
         return "{" +
                 "\"timestamp\":" + timestamp + "," +
                 "\"count\":" + count +
+                "}";
+    }
+
+    public String toJson2() {
+        return "{" +
+                "\"time\":\"" + DateTimeFormat.forPattern("yyyy-MM-dd HH:mm").print(timestamp) + "\"," +
+                "\"unique_users\":" + count +
                 "}";
     }
 }
