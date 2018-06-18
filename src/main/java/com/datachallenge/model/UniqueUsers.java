@@ -28,4 +28,16 @@ public class UniqueUsers {
     public void setCount(long count) {
         this.count = count;
     }
+
+    @Override
+    public String toString() {
+        return "UniqueUsers(" + timestamp + "," + count + ")";
+    }
+
+    public String toJson() {
+        return "{" +
+                "\"timestamp\":" + timestamp + "," +
+                "\"count\":" + count +
+                "}";
+    }
 }
